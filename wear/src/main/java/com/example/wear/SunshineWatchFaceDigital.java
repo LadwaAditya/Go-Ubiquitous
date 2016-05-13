@@ -33,7 +33,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.Time;
@@ -64,10 +63,10 @@ import java.util.concurrent.TimeUnit;
  * low-bit ambient mode, the text is drawn without anti-aliasing in ambient mode.
  */
 public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
-    private static final Typeface NORMAL_TYPEFACE =
-            Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL);
 
-    private static final String TAG = SunshineWatchFaceDigital.class.getSimpleName();
+    private static final String LOG_TAG = SunshineWatchFaceDigital.class.getSimpleName();
+
+    private static final Typeface NORMAL_TYPEFACE = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL);
 
     /**
      * Update rate in milliseconds for interactive mode. We update once a second since seconds are
@@ -88,7 +87,6 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
     private static class EngineHandler extends Handler {
         private final WeakReference<SunshineWatchFaceDigital.Engine> mWeakReference;
 
-
         public EngineHandler(SunshineWatchFaceDigital.Engine reference) {
             mWeakReference = new WeakReference<>(reference);
         }
@@ -106,37 +104,27 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine implements GoogleApiClient.ConnectionCallbacks,
+
+    private class Engine extends CanvasWatchFaceService.Engine implements
+            GoogleApiClient.ConnectionCallbacks,
             GoogleApiClient.OnConnectionFailedListener,
             DataApi.DataListener {
 
         final Handler mUpdateTimeHandler = new EngineHandler(this);
+
         boolean mRegisteredTimeZoneReceiver = false;
 
-        Paint mBackgroundPaint;
-        Paint mTextPaint;
+        Bitmap mIcon;
 
+        Paint mBackgroundPaint;
+        Paint mTimePaint;
         Paint mDatePaint;
         Paint mIconPaint;
         Paint mHighTempPaint;
         Paint mLowTempPaint;
 
-        String[] mDayNames;
-        String[] mMonthNames;
-
-
-        String mLowTemp;
-        String mHighTemp;
-
-        Bitmap mIcon;
-
-
         boolean mAmbient;
         Time mTime;
-
-        GoogleApiClient mGoogleApiClient;
-
-
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -144,10 +132,16 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
                 mTime.setToNow();
             }
         };
-        int mTapCount;
 
-        float mXOffset;
         float mYOffset;
+        int mTapCount;
+        String[] mDayNames;
+        String[] mMonthNames;
+
+        String mLowTemp;
+        String mHighTemp;
+
+        GoogleApiClient mGoogleApiClient;
 
         /**
          * Whether the display supports fewer bits for each color in ambient mode. When true, we
@@ -159,35 +153,38 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
 
+            //Watchface Style
             setWatchFaceStyle(new WatchFaceStyle.Builder(SunshineWatchFaceDigital.this)
                     .setCardPeekMode(WatchFaceStyle.PEEK_MODE_VARIABLE)
                     .setBackgroundVisibility(WatchFaceStyle.BACKGROUND_VISIBILITY_INTERRUPTIVE)
                     .setShowSystemUiTime(false)
-                    .setAcceptsTapEvents(true)
                     .build());
             Resources resources = SunshineWatchFaceDigital.this.getResources();
+
+
+            //Get Y offset
             mYOffset = resources.getDimension(R.dimen.digital_y_offset);
 
-            //BackGround
+
+            //Get paint colors
+            //Background
             mBackgroundPaint = new Paint();
             mBackgroundPaint.setColor(resources.getColor(R.color.background));
-
             //Time
-            mTextPaint = new Paint();
-            mTextPaint = createTextPaint(resources.getColor(R.color.digital_text));
-
-            mTime = new Time();
-
-
+            mTimePaint = new Paint();
+            mTimePaint.setColor(resources.getColor(R.color.digital_text_white));
+            mTimePaint.setTypeface(NORMAL_TYPEFACE);
+            mTimePaint.setAntiAlias(true);
+            //Date
             mDatePaint = new Paint();
-            mDatePaint.setColor(resources.getColor(R.color.digital_text));
+            mDatePaint.setColor(resources.getColor(R.color.digital_text_light_blue));
             mDatePaint.setTypeface(NORMAL_TYPEFACE);
             mDatePaint.setAntiAlias(true);
             //Icon
             mIconPaint = new Paint();
             //High Temp
             mHighTempPaint = new Paint();
-            mHighTempPaint.setColor(resources.getColor(R.color.digital_text));
+            mHighTempPaint.setColor(resources.getColor(R.color.digital_text_white));
             mHighTempPaint.setTypeface(NORMAL_TYPEFACE);
             mHighTempPaint.setAntiAlias(true);
             //Low Temp
@@ -197,16 +194,23 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             mLowTempPaint.setAntiAlias(true);
 
 
+            //Get current time
+            mTime = new Time();
+
+
+            //Get day and month names
+            DateFormatSymbols symbols = new DateFormatSymbols();
+            mDayNames = symbols.getShortWeekdays();
+            mMonthNames = symbols.getShortMonths();
+
+
+            //Connect to Wearable Api
             mGoogleApiClient = new GoogleApiClient.Builder(SunshineWatchFaceDigital.this)
                     .addConnectionCallbacks(this)
                     .addOnConnectionFailedListener(this)
                     .addApi(Wearable.API)
                     .build();
             mGoogleApiClient.connect();
-
-            DateFormatSymbols symbols = new DateFormatSymbols();
-            mDayNames = symbols.getShortWeekdays();
-            mMonthNames = symbols.getShortMonths();
         }
 
         @Override
@@ -242,6 +246,32 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             updateTimer();
         }
 
+        /**
+         * Captures tap event (and tap type) and toggles the background color if the user finishes
+         * a tap.
+         */
+        @Override
+        public void onTapCommand(int tapType, int x, int y, long eventTime) {
+            Resources resources = SunshineWatchFaceDigital.this.getResources();
+            switch (tapType) {
+                case TAP_TYPE_TOUCH:
+                    // The user has started touching the screen.
+                    break;
+                case TAP_TYPE_TOUCH_CANCEL:
+                    // The user has started a different gesture or otherwise cancelled the tap.
+                    break;
+                case TAP_TYPE_TAP:
+                    // The user has completed the tap gesture.
+
+
+                    mTapCount++;
+                    mBackgroundPaint.setColor(resources.getColor(mTapCount % 2 == 0 ?
+                            R.color.background : R.color.background2));
+                    break;
+            }
+            invalidate();
+        }
+
         private void registerReceiver() {
             if (mRegisteredTimeZoneReceiver) {
                 return;
@@ -266,18 +296,18 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             // Load resources that have alternate values for round watches.
             Resources resources = SunshineWatchFaceDigital.this.getResources();
             boolean isRound = insets.isRound();
-            mXOffset = resources.getDimension(isRound
-                    ? R.dimen.digital_x_offset_round : R.dimen.digital_x_offset);
-            float textSize = resources.getDimension(isRound
-                    ? R.dimen.digital_text_size_round : R.dimen.digital_text_size);
 
-            float dateSize = resources.getDimension(isRound ? R.dimen.digital_date_size_round : R.dimen.digital_date_size);
+            float timeTextSize = resources.getDimension(isRound
+                    ? R.dimen.digital_time_text_size_round : R.dimen.digital_time_text_size);
+            float dateTextSize = resources.getDimension(isRound
+                    ? R.dimen.digital_date_text_size_round : R.dimen.digital_date_text_size);
+            float tempTextSize = resources.getDimension(isRound
+                    ? R.dimen.digital_temp_text_size_round : R.dimen.digital_temp_text_size);
 
-            mTextPaint.setTextSize(textSize);
-
-            mDatePaint.setTextSize(dateSize);
-            mHighTempPaint.setTextSize(dateSize);
-            mLowTempPaint.setTextSize(dateSize);
+            mTimePaint.setTextSize(timeTextSize);
+            mDatePaint.setTextSize(dateTextSize);
+            mHighTempPaint.setTextSize(tempTextSize);
+            mLowTempPaint.setTextSize(tempTextSize);
         }
 
         @Override
@@ -298,7 +328,7 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             if (mAmbient != inAmbientMode) {
                 mAmbient = inAmbientMode;
                 if (mLowBitAmbient) {
-                    mTextPaint.setAntiAlias(!inAmbientMode);
+                    mTimePaint.setAntiAlias(!inAmbientMode);
                 }
                 invalidate();
             }
@@ -308,32 +338,9 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             updateTimer();
         }
 
-        /**
-         * Captures tap event (and tap type) and toggles the background color if the user finishes
-         * a tap.
-         */
-        @Override
-        public void onTapCommand(int tapType, int x, int y, long eventTime) {
-            Resources resources = SunshineWatchFaceDigital.this.getResources();
-            switch (tapType) {
-                case TAP_TYPE_TOUCH:
-                    // The user has started touching the screen.
-                    break;
-                case TAP_TYPE_TOUCH_CANCEL:
-                    // The user has started a different gesture or otherwise cancelled the tap.
-                    break;
-                case TAP_TYPE_TAP:
-                    // The user has completed the tap gesture.
-                    mTapCount++;
-                    mBackgroundPaint.setColor(resources.getColor(mTapCount % 2 == 0 ?
-                            R.color.background : R.color.background2));
-                    break;
-            }
-            invalidate();
-        }
-
         @Override
         public void onDraw(Canvas canvas, Rect bounds) {
+
             // Draw the background.
             if (isInAmbientMode()) {
                 canvas.drawColor(Color.BLACK);
@@ -344,13 +351,16 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             //Get center
             float centerX = bounds.centerX();
             float centerY = bounds.centerY();
-            // Draw H:MM in ambient mode or H:MM:SS in interactive mode.
+
+            //Set time
             mTime.setToNow();
 
-            String text = mAmbient
-                    ? String.format(Locale.ENGLISH, "%d:%02d", mTime.hour, mTime.minute)
-                    : String.format(Locale.ENGLISH, "%d:%02d:%02d", mTime.hour, mTime.minute, mTime.second);
+            // Draw HH:MM
+            String timeText = String.format(Locale.ENGLISH,"%02d:%02d", mTime.hour, mTime.minute);
+            float timeTextSize = mTimePaint.measureText(timeText);
+            canvas.drawText(timeText, centerX - timeTextSize/2, mYOffset, mTimePaint);
 
+            //Day SHORT-WEEKDAY, SHORT-MONTH DAY YEAR
             String dateText = String.format(Locale.ENGLISH,
                     "%s, %s %d %d",
                     mDayNames[mTime.weekDay],
@@ -358,18 +368,17 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
                     mTime.monthDay,
                     mTime.year
             );
-
             float dateTextSize = mDatePaint.measureText(dateText);
             float dateYOffset = mYOffset + getResources().getDimension(R.dimen.digital_time_text_margin_bottom);
-            canvas.drawText(dateText.toUpperCase(), centerX - dateTextSize / 2, dateYOffset, mDatePaint);
+            canvas.drawText(dateText.toUpperCase(), centerX - dateTextSize/2, dateYOffset, mDatePaint);
 
-            canvas.drawText(text, mXOffset, mYOffset, mTextPaint);
 
+            //Draw Icon and Temperatures
             if (mHighTemp != null && mLowTemp != null) {
                 float tempYOffset = dateYOffset + getResources().getDimension(R.dimen.digital_date_text_margin_bottom);
                 //Icon
-                if (mIcon != null && !mLowBitAmbient)
-                    canvas.drawBitmap(mIcon, centerX - mIcon.getWidth() - mIcon.getWidth() / 4, tempYOffset - mIcon.getHeight() / 2, mIconPaint);
+                if(mIcon != null && !mLowBitAmbient)
+                    canvas.drawBitmap(mIcon, centerX - mIcon.getWidth() - mIcon.getWidth()/4, tempYOffset - mIcon.getHeight() / 2, mIconPaint);
                 //High temp
                 canvas.drawText(mHighTemp, centerX, tempYOffset, mHighTempPaint);
                 //Low temp
@@ -377,7 +386,6 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
                 float highTempRightMargin = getResources().getDimension(R.dimen.digital_temp_text_margin_right);
                 canvas.drawText(mLowTemp, centerX + highTempSize + highTempRightMargin, tempYOffset, mLowTempPaint);
             }
-
         }
 
         /**
@@ -412,22 +420,35 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             }
         }
 
+
+        /**
+         * GoogleApiClient implementation
+         */
         @Override
-        public void onConnected(@Nullable Bundle bundle) {
-            Log.d(TAG, "Connected to Google Play...");
+        public void onConnected(Bundle bundle) {
+            Log.d(LOG_TAG, "Connected to Google Play...");
             Wearable.DataApi.addListener(mGoogleApiClient, Engine.this);
         }
 
         @Override
         public void onConnectionSuspended(int i) {
-            Log.d(TAG, "Disconnected from Google Play...");
+            Log.d(LOG_TAG, "Disconnected from Google Play...");
         }
 
         @Override
-        public void onDataChanged(DataEventBuffer dataEventBuffer) {
-            Log.d(TAG, "New data received");
+        public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+            Log.d(LOG_TAG, "Google Play connection failed...");
+        }
 
-            for (DataEvent event : dataEventBuffer) {
+
+        /**
+         * DataApi listener
+         */
+        @Override
+        public void onDataChanged(DataEventBuffer dataEvents) {
+            Log.d(LOG_TAG, "New data received");
+
+            for (DataEvent event : dataEvents) {
                 if (event.getType() == DataEvent.TYPE_CHANGED) {
                     DataItem item = event.getDataItem();
                     if (item.getUri().getPath().compareTo("/sunshine-temp-update") == 0) {
@@ -440,11 +461,7 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
                     }
                 }
             }
-        }
 
-        @Override
-        public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-            Log.d(TAG, "Google Play connection failed...");
         }
 
         public Bitmap loadBitmapFromAsset(Asset asset) {
@@ -465,7 +482,6 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             return BitmapFactory.decodeStream(assetInputStream);
         }
 
-
         public class GetBitmapForWeatherTask extends AsyncTask<Asset, Void, Void> {
 
             @Override
@@ -480,5 +496,6 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
                 return null;
             }
         }
+
     }
 }
