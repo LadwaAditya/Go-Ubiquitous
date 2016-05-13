@@ -304,6 +304,8 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             float tempTextSize = resources.getDimension(isRound
                     ? R.dimen.digital_temp_text_size_round : R.dimen.digital_temp_text_size);
 
+            mYOffset = resources.getDimension(isRound ? R.dimen.digital_y_offset_round : R.dimen.digital_y_offset);
+
             mTimePaint.setTextSize(timeTextSize);
             mDatePaint.setTextSize(dateTextSize);
             mHighTempPaint.setTextSize(tempTextSize);
@@ -356,9 +358,9 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             mTime.setToNow();
 
             // Draw HH:MM
-            String timeText = String.format(Locale.ENGLISH,"%02d:%02d", mTime.hour, mTime.minute);
+            String timeText = String.format(Locale.ENGLISH, "%02d:%02d", mTime.hour, mTime.minute);
             float timeTextSize = mTimePaint.measureText(timeText);
-            canvas.drawText(timeText, centerX - timeTextSize/2, mYOffset, mTimePaint);
+            canvas.drawText(timeText, centerX - timeTextSize / 2, mYOffset, mTimePaint);
 
             //Day SHORT-WEEKDAY, SHORT-MONTH DAY YEAR
             String dateText = String.format(Locale.ENGLISH,
@@ -370,15 +372,15 @@ public class SunshineWatchFaceDigital extends CanvasWatchFaceService {
             );
             float dateTextSize = mDatePaint.measureText(dateText);
             float dateYOffset = mYOffset + getResources().getDimension(R.dimen.digital_time_text_margin_bottom);
-            canvas.drawText(dateText.toUpperCase(), centerX - dateTextSize/2, dateYOffset, mDatePaint);
+            canvas.drawText(dateText.toUpperCase(), centerX - dateTextSize / 2, dateYOffset, mDatePaint);
 
 
             //Draw Icon and Temperatures
             if (mHighTemp != null && mLowTemp != null) {
                 float tempYOffset = dateYOffset + getResources().getDimension(R.dimen.digital_date_text_margin_bottom);
                 //Icon
-                if(mIcon != null && !mLowBitAmbient)
-                    canvas.drawBitmap(mIcon, centerX - mIcon.getWidth() - mIcon.getWidth()/4, tempYOffset - mIcon.getHeight() / 2, mIconPaint);
+                if (mIcon != null && !mLowBitAmbient)
+                    canvas.drawBitmap(mIcon, centerX - mIcon.getWidth() - mIcon.getWidth() / 4, tempYOffset - mIcon.getHeight() / 2, mIconPaint);
                 //High temp
                 canvas.drawText(mHighTemp, centerX, tempYOffset, mHighTempPaint);
                 //Low temp
